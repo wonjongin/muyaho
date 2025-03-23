@@ -130,7 +130,7 @@ class RefrigeratorStack:
     def _check_expiry(self) -> None:
         """유통기한이 지난 아이템을 주기적으로 제거하는 백그라운드 메서드"""
         while True:
-            time.sleep(10)  # 1초마다 체크
+            time.sleep(1)  # 1초마다 체크
 
             with self._lock:
                 current_time = time.time()
