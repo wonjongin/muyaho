@@ -94,7 +94,7 @@ def test_random_exception():
 
     # 여러 번 시도하면 언젠가 예외가 발생해야 함
     exception_occurred = False
-    for _ in range(100):  # 충분히 많은 시도
+    for _ in range(1000):  # 충분히 많은 시도
         try:
             fridge.find("사과")
         except FoodEatenException:
