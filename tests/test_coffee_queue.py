@@ -1,30 +1,64 @@
 import time
-from coffee_queue import CoffeQueue
-from threading import Thread
+import random
+from muyaho.coffee_queue import CoffeeQueue
+from muyaho.circular_queue import CircularQueue
 
-def TestCoffeeQueue():
-    coffee_queue = CoffeeQueue(max_size=5, caffeine_threshold=5)
+# 큐 길이 계산용
+def queue_length(queue):
+    return (queue.rear - queue.front + queue.MAX_SIZE) % queue.MAX_SIZE
 
-    coffee_queue.enqueue_coffee("아메리카노")
-    coffee_queue.enqueue_coffee("플랫화이트")
-    coffee_queue.enqueue_coffee("바닐라크림 콜드브루")
-    coffee_queue.enqueue_coffee("모카")
-    coffee_queue.enqueue_coffee("카푸치노")
+def test_basic_coffee_queue_operations(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    q = CoffeeQueue(max_size=5, caffeine_threshold=3)
 
-    coffee_queue.enqueue_task("과제1")
-    coffee_queue.enqueue_task("과제2")
-    coffee_queue.enqueue_task("과제3")
-    coffee_queue.enqueue_task("과제4")
+    q.enqueue_coffee("아메리카노")
+    q.enqueue_coffee("라떼")
+    q.enqueue_coffee("콜드브루")
+    assert q.caffeine_level == 3
 
-    for _ in range(10) : 
-        time.sleep(1)
-        coffee_queue.print_state()
+    q.enqueue_task("과제1")
+    q.enqueue_task("과제2")
+    assert queue_length(q.task_queue) == 2
 
-        task = coffee_queue.dequeue_task()
-        if task : 
-            print(f"처리한 과제 : {task}")
-        
-test_thread = Thread(target = TestCoffeeQueue)
-test_thread.start()
+    q.process_tasks()
+    assert "과제1" in q.completed_tasks
+    assert "과제2" in q.completed_tasks
+    assert len(q.bounced_tasks) == 0
 
-test_thread.join()
+def test_task_bounce(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.0)  # 항상 튕기게
+    q = CoffeeQueue(max_size=5, caffeine_threshold=1)
+
+    q.enqueue_coffee("더블샷")
+    q.enqueue_task("과제1")
+    q.enqueue_task("과제2")
+
+    q.process_tasks()
+    assert len(q.completed_tasks) == 0
+    assert "과제1" in q.bounced_tasks
+    assert "과제2" in q.bounced_tasks
+
+def test_mixed_behavior(monkeypatch):
+    monkeypatch.setattr(random, "random", lambda: 0.5)  # 안 튕김
+    q = CoffeeQueue(max_size=5, caffeine_threshold=2)
+
+    q.enqueue_coffee("아침커피")
+    q.enqueue_coffee("점심커피")
+    q.enqueue_task("레포트 작성")
+
+    q.process_tasks()
+    assert "레포트 작성" in q.completed_tasks
+    assert len(q.bounced_tasks) == 0
+
+def test_print_state(monkeypatch, capsys):
+    monkeypatch.setattr(random, "random", lambda: 1.0)
+    q = CoffeeQueue(max_size=5, caffeine_threshold=2)
+    q.enqueue_coffee("라떼")
+    q.enqueue_coffee("아포가토")
+    q.enqueue_task("슬라이드 준비")
+    q.process_tasks()
+    q.print_state()
+
+    captured = capsys.readouterr()
+    assert "슬라이드 준비" in captured.out
+    assert "카페인 수치" in captured.out
