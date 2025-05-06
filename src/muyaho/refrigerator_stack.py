@@ -102,7 +102,7 @@ class RefrigeratorStack:
             item_match: 비교할 아이템 또는 비교 함수
         """
         with self._lock:
-            if random.random() < 0.1:  # 10% 확률로 예외 발생
+            if random.random() < 0.01:  # 1% 확률로 예외 발생
                 raise FoodEatenException("누가 이걸 다 먹었어?!")
 
             for item in self._stack:
