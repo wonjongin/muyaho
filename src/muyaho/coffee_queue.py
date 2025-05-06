@@ -4,109 +4,109 @@ import threading
 from typing import Any
 from circular_queue import CircularQueue
 
-class CaffeinatedTask:
-    def __init__(self, task: Any):
-        self.task = task
+class CaffeinatedItem:
+    def __init__(self, data: Any):
+        self.data = data
         self.timestamp = time.time()
         self.caffeine_level = 0  # 시간이 지날수록 증가
 
 class CoffeeQueue:
     """
-    커피 주입과 과제 큐를 분리하여 과제가 과카페인 상태로 처리되는 원형 큐
-    - 커피 큐는 커피를 넣는 곳
-    - 과제 큐는 과제가 쌓여서 처리되는 곳
-    - 과제 큐의 항목이 과카페인 상태가 되면 우선 처리 큐로 이동하거나 랜덤하게 튕겨져 나간다.
+    실행 시간에 따라 카페인 레벨이 증가하는 원형 큐
+    - 오래 대기하면 과카페인 상태로 튀어나옴
+    - 과제가 모두 처리되면 '과제 완료' 출력
+    - 과카페인 상태로 모든 과제가 튕겨지면 '방전' 출력
     """
     def __init__(self, max_size: int = 100, caffeine_threshold: int = 30):
-        # 커피와 과제 큐를 따로 관리
-        self.coffee_queue = CircularQueue()
-        self.task_queue = CircularQueue()
-        
+        self.queue = CircularQueue()
+        self.items = [None] * self.queue.MAX_SIZE
+        self.front = self.queue.front
+        self.rear = self.queue.rear
         self.max_size = max_size
         self.lock = threading.Lock()
         self.caffeine_threshold = caffeine_threshold
-
-        # 과카페인 상태 처리 전용 큐
-        self.priority_queue = []
+        self.tasks_remaining = 0  # 남은 과제 수 추적
 
         # 카페인 상태 모니터링 쓰레드
         self._thread = threading.Thread(target=self._monitor_caffeine, daemon=True)
         self._thread.start()
 
     def enqueue_coffee(self, coffee: Any):
-        """커피 큐에 커피 주입"""
+        """커피 항목을 큐에 추가"""
         with self.lock:
-            if self.coffee_queue.is_full():
-                print("⚠️ 커피 큐가 가득 찼습니다.")
+            wrapped = CaffeinatedItem(coffee)
+            if self.queue.is_full():
+                print("⚠️ 큐가 가득 찼습니다.")
                 return
-            self.coffee_queue.enqueue(coffee)
-            print(f"☕ 커피가 큐에 주입되었습니다: {coffee}")
+            self.queue.enqueue(wrapped)
+            self.rear = self.queue.rear
+            self.items[self.rear] = wrapped
 
     def enqueue_task(self, task: Any):
-        """과제 큐에 과제 추가"""
+        """과제를 큐에 추가"""
         with self.lock:
-            wrapped = CaffeinatedTask(task)
-            if self.task_queue.is_full():
-                print("⚠️ 과제 큐가 가득 찼습니다.")
+            wrapped = CaffeinatedItem(task)
+            if self.queue.is_full():
+                print("⚠️ 큐가 가득 찼습니다.")
                 return
-            self.task_queue.enqueue(wrapped)
-            print(f"📚 과제가 큐에 추가되었습니다: {task}")
+            self.queue.enqueue(wrapped)
+            self.rear = self.queue.rear
+            self.items[self.rear] = wrapped
+            self.tasks_remaining += 1  # 과제 수 증가
 
     def dequeue_task(self) -> Any:
-        """우선 처리 큐가 있으면 우선 처리 큐에서 과제 처리"""
+        """과제를 처리"""
         with self.lock:
-            if self.priority_queue:  # 우선 처리 큐가 있으면
-                item = self.priority_queue.pop(0)
-                print(f"🔥 우선 처리 큐에서 과제 처리: {item.task}")
-                return item.task
-
-            if self.task_queue.is_empty():
-                print("⚠️ 과제 큐가 비어 있습니다.")
+            if self.queue.is_empty():
+                print("⚠️ 큐가 비어 있습니다.")
                 return None
-            item: CaffeinatedTask = self.task_queue.dequeue()
-            return item.task
+            item: CaffeinatedItem = self.queue.dequeue()
+            self.front = self.queue.front
+            self.tasks_remaining -= 1  # 과제 수 감소
+            return item.data
 
     def _monitor_caffeine(self):
         """과카페인 상태 요소를 랜덤하게 튀어나오게 함"""
         while True:
             time.sleep(1)
             with self.lock:
-                i = self.task_queue.front
-                while i != self.task_queue.rear:
-                    i = (i + 1) % self.task_queue.MAX_SIZE
-                    item: CaffeinatedTask = self.task_queue.items[i]
+                i = self.queue.front
+                while i != self.queue.rear:
+                    i = (i + 1) % self.queue.MAX_SIZE
+                    item: CaffeinatedItem = self.items[i]
                     if item is None:
                         continue
 
                     # 카페인 레벨 증가
                     item.caffeine_level += 1
 
-                    # 일정 수치 넘으면 랜덤하게 튕겨나가거나 우선 처리 큐로 이동
+                    # 일정 수치 넘으면 랜덤하게 튀어나올 수 있음
                     if item.caffeine_level >= self.caffeine_threshold:
-                        if random.random() < 0.3:  # 30% 확률로 튕겨나감
-                            print(f"💥 과카페인으로 튕겨 나온 과제: {item.task}")
-                            self.task_queue.dequeue()  # 큐에서 튕겨 나옴
-                        else:
-                            # 우선 처리 큐에 넣어 놓기
-                            print(f"🔥 과카페인 상태로 우선 처리 큐에 추가된 과제: {item.task}")
-                            self.priority_queue.append(item)
-                time.sleep(1)
+                        if random.random() < 0.3:  # 30% 확률로 튀어나감
+                            print(f"💥 과카페인으로 튀어나온 항목: {item.data}")
+                            if i == self.queue.front:
+                                self.queue.dequeue()
+                            else:
+                                self.items[i] = None  # 삭제된 것처럼 처리
+
+            # 과제가 모두 처리되었는지 확인
+            if self.tasks_remaining == 0:
+                print("✅ 과제 완료")
+            
+            # 모든 과제가 과카페인 상태로 튕겨져 나가면 방전 처리
+            if self.tasks_remaining == 0 and all(item is None for item in self.items):
+                print("⚡ 기절")
+                break  # 방전 후 종료하거나 원하는 대로 처리
+
+            time.sleep(1)
 
     def print_state(self):
         """큐 상태 출력"""
-        print("☕ 커피 큐 상태:")
-        i = self.coffee_queue.front
-        while i != self.coffee_queue.rear:
-            i = (i + 1) % self.coffee_queue.MAX_SIZE
-            item = self.coffee_queue.items[i]
-            if item:
-                print(f" - 커피: {item}")
-
-        print("📚 과제 큐 상태:")
-        i = self.task_queue.front
-        while i != self.task_queue.rear:
-            i = (i + 1) % self.task_queue.MAX_SIZE
-            item = self.task_queue.items[i]
+        print("☕ 현재 큐 상태:")
+        i = self.queue.front
+        while i != self.queue.rear:
+            i = (i + 1) % self.queue.MAX_SIZE
+            item = self.items[i]
             if item:
                 elapsed = int(time.time() - item.timestamp)
-                print(f" - 과제: {item.task} (카페인: {item.caffeine_level}, 대기: {elapsed}s)")
+                print(f" - {item.data} (카페인: {item.caffeine_level}, 대기: {elapsed}s)")

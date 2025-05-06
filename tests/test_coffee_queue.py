@@ -1,34 +1,30 @@
 import time
-from coffee_queue import CoffeeQueue
+from coffee_queue import CoffeQueue
+from threading import Thread
 
-def TestCoffeeQueue() : 
-    print("카페인 중독 과정 시뮬레이션")
-    cq = CoffeeQueue(caffeine_threshold=5)
+def TestCoffeeQueue():
+    coffee_queue = CoffeeQueue(max_size=5, caffeine_threshold=5)
 
-    cq.enqueue("바닐라크림 콜드브루")
-    time.sleep(1)
-    cq.enqueue("플랫화이트")
-    time.sleep(1)
-    cq.enqueue("아메리카노")
-    time.sleep(1)
+    coffee_queue.enqueue_coffee("아메리카노")
+    coffee_queue.enqueue_coffee("플랫화이트")
+    coffee_queue.enqueue_coffee("바닐라크림 콜드브루")
+    coffee_queue.enqueue_coffee("모카")
+    coffee_queue.enqueue_coffee("카푸치노")
 
-    print("카페인 주입 완료")
-    time.slepp(1)
+    coffee_queue.enqueue_task("과제1")
+    coffee_queue.enqueue_task("과제2")
+    coffee_queue.enqueue_task("과제3")
+    coffee_queue.enqueue_task("과제4")
 
-    print("\n 카페인 상태 확인")
-    cq.print_state()
+    for _ in range(10) : 
+        time.sleep(1)
+        coffee_queue.print_state()
 
-    print("\n 카페인 과다 대기중")
-    time.sleep(10)
+        task = coffee_queue.dequeue_task()
+        if task : 
+            print(f"처리한 과제 : {task}")
+        
+test_thread = Thread(target = TestCoffeeQueue)
+test_thread.start()
 
-    print("\n 최종 상태")
-    cq.print_state()
-
-    print("\n 일반 dequeue")
-    item = cq.dequeue()
-    print(f"일반 dequeue 결과: {item}")
-
-    print("\n 테스트 종료")
-
-if __name__ == "__main__":
-    test_coffee_queue()
+test_thread.join()
